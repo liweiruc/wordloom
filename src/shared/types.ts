@@ -77,8 +77,11 @@ export type SettingsPatch = { [K in keyof AppSettings]?: Partial<AppSettings[K]>
 export interface SettingsView {
   settings: AppSettings
   hasApiKey: boolean
-  dataDir: string
+  storage: StorageInfo
 }
+
+/** Where the database lives: a folder on Windows, the browser's own storage on the iPad. */
+export type StorageInfo = { kind: 'folder'; path: string } | { kind: 'browser' }
 
 // ---------- import ----------
 
@@ -481,8 +484,16 @@ export interface Dashboard {
 // ---------- data ----------
 
 export interface BackupInfo {
+  /** What restore() takes: a path on Windows, the file's name in the browser's storage. */
   file: string
   name: string
   size: number
   createdAt: number
+}
+
+/** A file for the person to keep; the interface offers it to save or share. */
+export interface ExportFile {
+  name: string
+  mime: string
+  data: string | Uint8Array
 }

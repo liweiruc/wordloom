@@ -19,7 +19,7 @@ import {
   type WordQuery,
   type WordStatus
 } from '../../shared/types'
-import type { DB } from '../db/connection'
+import type { DB } from '../db/types'
 import { cleanHeadword, isHeadwordLike } from '../import/normalize'
 import type { EntryDraft } from '../llm/validate'
 import { toCardView, type CardRow } from '../srs/scheduler'

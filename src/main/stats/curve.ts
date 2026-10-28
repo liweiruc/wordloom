@@ -1,6 +1,6 @@
 import type { FSRS } from 'ts-fsrs'
 import type { CurveData, Grade } from '../../shared/types'
-import type { DB } from '../db/connection'
+import type { DB } from '../db/types'
 import type { CardRow } from '../srs/scheduler'
 
 const DAY = 86_400_000

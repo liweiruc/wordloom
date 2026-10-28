@@ -100,7 +100,10 @@ export class LlmClient {
       apiKey: config.apiKey,
       baseURL: config.baseUrl,
       timeout: 120_000,
-      maxRetries: 3
+      maxRetries: 3,
+      // The web app calls the API from the iPad itself. The key is the person's own and is
+      // kept only on their device, which is the case this warning in the SDK is about.
+      dangerouslyAllowBrowser: true
     })
   }
 

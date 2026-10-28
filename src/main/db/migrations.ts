@@ -1,4 +1,4 @@
-import type { DB } from './connection'
+import type { DB } from './types'
 
 // Each entry upgrades the schema by one version; PRAGMA user_version records how many have
 // run. Shipped entries are never edited: a database already at that version would skip the

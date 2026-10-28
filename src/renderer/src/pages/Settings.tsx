@@ -1,9 +1,20 @@
-import { Database, Download, FolderOpen, HardDriveDownload, KeyRound, Volume2 } from 'lucide-react'
-import { useState } from 'react'
-import type { AppSettings } from '../../../shared/types'
+import {
+  ArchiveRestore,
+  Database,
+  Download,
+  FileDown,
+  FolderOpen,
+  HardDriveDownload,
+  KeyRound,
+  TriangleAlert,
+  Volume2
+} from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import type { AppSettings, ExportFile } from '../../../shared/types'
 import {
   Button,
   Field,
+  Notice,
   Page,
   PageHeader,
   Panel,
@@ -15,6 +26,7 @@ import {
 import { api, errorText } from '../lib/api'
 import { useApp } from '../lib/useApp'
 import { formatBytes, formatDateTime } from '../lib/format'
+import { saveFile } from '../lib/save-file'
 import { speak, useEnglishVoices } from '../lib/speech'
 import { useAsync } from '../lib/useAsync'
 
@@ -98,7 +110,9 @@ function ApiKeyField(): React.JSX.Element {
       label="API key"
       hint={
         settings?.hasApiKey
-          ? '已保存（用 Windows 加密存放在本机）。输入新的 key 可以替换。'
+          ? settings.storage.kind === 'folder'
+            ? '已保存（用 Windows 加密存放在本机）。输入新的 key 可以替换。'
+            : '已保存（只存放在这台设备上，不会写进导出的数据库文件）。输入新的 key 可以替换。'
           : '在 platform.deepseek.com 创建；只保存在本机。'
       }
     >
@@ -322,8 +336,8 @@ function DisplaySection(): React.JSX.Element {
         label="发音人"
         hint={
           voices.length === 0
-            ? '没有找到英文语音：在 Windows 设置 → 时间和语言 → 语音 里添加。'
-            : '使用 Windows 自带的语音，离线可用。'
+            ? '没有找到英文语音：在系统设置里添加（Windows：设置 → 时间和语言 → 语音）。'
+            : '使用系统自带的语音，离线可用。'
         }
       >
         <div className="flex gap-2">
@@ -375,6 +389,14 @@ function DataSection(): React.JSX.Element {
   const { settings, toast } = useApp()
   const backups = useAsync(() => api.data.listBackups(), [])
   const [busy, setBusy] = useState<string | null>(null)
+  const [persisted, setPersisted] = useState<boolean | null>(null)
+  const restoreInput = useRef<HTMLInputElement>(null)
+  const storage = settings?.storage
+  // In a browser the data can be cleared under storage pressure unless it was made persistent.
+  useEffect(() => {
+    if (storage?.kind !== 'browser') return
+    void navigator.storage?.persisted?.().then(setPersisted)
+  }, [storage?.kind])
   const act = async (
     name: string,
     fn: () => Promise<string | null | void>,
@@ -391,19 +413,52 @@ function DataSection(): React.JSX.Element {
       setBusy(null)
     }
   }
+  // The save dialog or share sheet is the feedback here; only failures get a toast.
+  const save = (name: string, make: () => Promise<ExportFile>): Promise<void> =>
+    act(
+      name,
+      async () => saveFile(await make()),
+      () => null
+    )
+  const restoreFile = async (file: File): Promise<void> => {
+    if (
+      !window.confirm(
+        `用「${file.name}」替换现在的全部数据？当前数据会先另存一份备份，然后应用会重新启动。`
+      )
+    ) {
+      return
+    }
+    await act(
+      'restoreFile',
+      async () => api.data.restoreFile(new Uint8Array(await file.arrayBuffer())),
+      () => null
+    )
+  }
   return (
     <Panel title="数据" subtitle="所有数据都在本机一个 SQLite 文件里；每天第一次打开时自动备份">
-      <Field label="数据目录">
-        <div className="flex gap-2">
-          <TextInput value={settings?.dataDir ?? ''} readOnly />
-          <Button icon={<FolderOpen size={15} />} onClick={() => api.data.openFolder()}>
-            打开
-          </Button>
+      {storage?.kind === 'browser' && (
+        <div className="mb-2">
+          <Notice tone="warn" icon={<TriangleAlert size={16} className="shrink-0" />}>
+            数据只保存在这台设备的 Wordloom 里，不会同步到别处。从主屏幕删除 Wordloom
+            会同时删除全部数据，Safari
+            里打开的网页版也是另外一份数据。请不时「导出数据库文件」存到「文件」里。
+            {persisted === false && '浏览器还没有允许持久保存，存储空间紧张时数据可能被清除。'}
+          </Notice>
         </div>
-      </Field>
-      <Field label="备份">
-        <div className="flex flex-col gap-2">
+      )}
+      {storage?.kind === 'folder' && (
+        <Field label="数据目录">
           <div className="flex gap-2">
+            <TextInput value={storage.path} readOnly />
+            <Button icon={<FolderOpen size={15} />} onClick={() => api.data.openFolder()}>
+              打开
+            </Button>
+          </div>
+        </Field>
+      )}
+      <Field label="备份" buttons>
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               icon={<HardDriveDownload size={15} />}
               busy={busy === 'backup'}
@@ -420,6 +475,24 @@ function DataSection(): React.JSX.Element {
             >
               立即备份
             </Button>
+            <Button
+              icon={<ArchiveRestore size={15} />}
+              busy={busy === 'restoreFile'}
+              onClick={() => restoreInput.current?.click()}
+            >
+              从文件恢复…
+            </Button>
+            {/* No accept filter: iOS greys out file types it cannot name, and .db is one. */}
+            <input
+              ref={restoreInput}
+              type="file"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                e.target.value = ''
+                if (file) void restoreFile(file)
+              }}
+            />
           </div>
           {backups.data && backups.data.length > 0 && (
             <div className="max-h-56 overflow-auto rounded-lg border border-[var(--border)]">
@@ -438,7 +511,7 @@ function DataSection(): React.JSX.Element {
                     onClick={() => {
                       if (
                         window.confirm(
-                          `用备份「${b.name}」替换现在的全部数据？当前数据会先另存一份备份，然后应用会重启。`
+                          `用备份「${b.name}」替换现在的全部数据？当前数据会先另存一份备份，然后应用会重新启动。`
                         )
                       ) {
                         void act(
@@ -457,31 +530,30 @@ function DataSection(): React.JSX.Element {
           )}
         </div>
       </Field>
-      <Field label="导出">
-        <div className="flex gap-2">
+      <Field
+        label="导出"
+        hint="数据库文件就是完整备份，可以在另一台设备上用「从文件恢复」打开。"
+        buttons
+      >
+        <div className="flex flex-wrap gap-2">
+          <Button
+            icon={<FileDown size={15} />}
+            busy={busy === 'db'}
+            onClick={() => save('db', () => api.data.exportDatabase())}
+          >
+            导出数据库文件
+          </Button>
           <Button
             icon={<Download size={15} />}
             busy={busy === 'json'}
-            onClick={() =>
-              act(
-                'json',
-                () => api.data.exportJson(),
-                (r) => (r ? `已导出到 ${r}` : null)
-              )
-            }
+            onClick={() => save('json', () => api.data.exportJson())}
           >
             导出 JSON（完整）
           </Button>
           <Button
             icon={<Database size={15} />}
             busy={busy === 'csv'}
-            onClick={() =>
-              act(
-                'csv',
-                () => api.data.exportCsv(),
-                (r) => (r ? `已导出到 ${r}` : null)
-              )
-            }
+            onClick={() => save('csv', () => api.data.exportCsv())}
           >
             导出 CSV（可用 Excel 打开）
           </Button>

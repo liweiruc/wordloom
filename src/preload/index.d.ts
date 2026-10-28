@@ -4,7 +4,6 @@ declare global {
   interface Window {
     api: WordloomApi
     wordloomEvents: WordloomEvents
-    files: { pathFor(file: File): string }
   }
 }
 

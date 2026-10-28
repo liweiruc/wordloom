@@ -1,9 +1,10 @@
-import { app, BrowserWindow, dialog, Menu, nativeTheme, safeStorage, shell } from 'electron'
+import { app, BrowserWindow, Menu, nativeTheme, safeStorage, shell } from 'electron'
 import { join } from 'path'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { openDatabase } from './db/connection'
-import type { SecretCodec } from './db/settings'
+import { hasApiKey, loadApiKey, saveApiKey, type SecretCodec } from './db/settings'
+import { createFileStore } from './data/fileStore'
 import { registerIpc } from './ipc'
 import { createServices } from './services'
 
@@ -82,28 +83,15 @@ if (!app.requestSingleInstanceLock()) {
     const db = openDatabase(dbFile)
     const services = createServices({
       db,
-      dbFile,
-      dataDir,
-      codec,
+      store: createFileStore(db, dbFile, dataDir, async (path) => {
+        await shell.openPath(path)
+      }),
+      secrets: {
+        has: () => hasApiKey(db),
+        load: () => loadApiKey(db, codec),
+        save: (key) => saveApiKey(db, codec, key)
+      },
       platform: {
-        async pickFiles() {
-          const result = await dialog.showOpenDialog({
-            title: '选择单词文件',
-            properties: ['openFile', 'multiSelections'],
-            filters: [
-              { name: '文本文件', extensions: ['txt', 'md', 'csv', 'tsv'] },
-              { name: '所有文件', extensions: ['*'] }
-            ]
-          })
-          return result.canceled ? [] : result.filePaths
-        },
-        async pickSaveFile(defaultName, filters) {
-          const result = await dialog.showSaveDialog({ defaultPath: defaultName, filters })
-          return result.canceled || !result.filePath ? null : result.filePath
-        },
-        async openPath(path) {
-          await shell.openPath(path)
-        },
         send(channel, payload) {
           if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload)
         },

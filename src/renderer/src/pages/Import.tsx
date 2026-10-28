@@ -1,6 +1,7 @@
 import { CircleCheck, FileUp, FolderOpen, RotateCcw, Sparkles } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { decodeText } from '../../../shared/decode'
 import { suggestedHeadword } from '../../../shared/triage'
 import {
   DEFAULT_LIST_NAME,
@@ -74,6 +75,21 @@ function defaultListName(sources: ImportSource[]): string {
   return first.replace(/\.[^.]+$/, '') || `导入 ${new Date().toLocaleDateString()}`
 }
 
+const TEXT_FILE = /\.(txt|md|csv|tsv|text)$/i
+
+// Picked and dropped files are read here, where the browser hands them over, and decoded
+// before they go to the main process (or the web app's worker) as text.
+async function readFiles(files: File[]): Promise<ImportSource[]> {
+  const usable = files.filter((f) => TEXT_FILE.test(f.name))
+  if (usable.length === 0) throw new Error('只支持 .txt / .md / .csv 文本文件。')
+  return Promise.all(
+    usable.map(async (f) => ({
+      name: f.name,
+      ...decodeText(new Uint8Array(await f.arrayBuffer()))
+    }))
+  )
+}
+
 export default function ImportPage(): React.JSX.Element {
   const { settings, toast, refreshEnrich } = useApp()
   const [sources, setSources] = useState<ImportSource[]>([])
@@ -88,6 +104,7 @@ export default function ImportPage(): React.JSX.Element {
   const [filter, setFilter] = useState<Filter>('all')
   const [committing, setCommitting] = useState(false)
   const [result, setResult] = useState<CommitResult | null>(null)
+  const fileInput = useRef<HTMLInputElement>(null)
 
   const canTriage = Boolean(settings?.hasApiKey)
 
@@ -150,9 +167,10 @@ export default function ImportPage(): React.JSX.Element {
     }
   }
 
-  const pick = async (): Promise<void> => {
+  const loadFiles = async (files: File[]): Promise<void> => {
+    if (files.length === 0) return
     try {
-      await load(await api.importer.pickFiles())
+      await load(await readFiles(files))
     } catch (err) {
       toast(errorText(err), 'error')
     }
@@ -161,13 +179,7 @@ export default function ImportPage(): React.JSX.Element {
   const onDrop = async (e: React.DragEvent): Promise<void> => {
     e.preventDefault()
     setDragging(false)
-    const paths = [...e.dataTransfer.files].map((f) => window.files.pathFor(f)).filter(Boolean)
-    if (paths.length === 0) return
-    try {
-      await load(await api.importer.readPaths(paths))
-    } catch (err) {
-      toast(errorText(err), 'error')
-    }
+    await loadFiles([...e.dataTransfer.files])
   }
 
   const finals = useMemo(() => {
@@ -276,12 +288,25 @@ export default function ImportPage(): React.JSX.Element {
             <Button
               variant="primary"
               icon={<FolderOpen size={16} />}
-              onClick={pick}
+              onClick={() => fileInput.current?.click()}
               busy={loading}
               className="mt-2"
             >
               选择文件
             </Button>
+            <input
+              ref={fileInput}
+              type="file"
+              multiple
+              accept=".txt,.md,.csv,.tsv,.text,text/plain,text/csv,text/markdown"
+              className="hidden"
+              onChange={(e) => {
+                const files = [...(e.target.files ?? [])]
+                // Cleared so that picking the same file again still counts as a change.
+                e.target.value = ''
+                void loadFiles(files)
+              }}
+            />
           </div>
           <Panel title="或者粘贴文本">
             <textarea

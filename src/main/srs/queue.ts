@@ -1,6 +1,6 @@
 import type { FSRS } from 'ts-fsrs'
 import type { StudySettings } from '../../shared/types'
-import type { DB } from '../db/connection'
+import type { DB } from '../db/types'
 import { retrievability, type CardRow } from './scheduler'
 
 export interface QueueEntry {

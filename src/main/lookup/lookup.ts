@@ -9,7 +9,7 @@ import {
   type LookupHistoryItem,
   type LookupResult
 } from '../../shared/types'
-import type { DB } from '../db/connection'
+import type { DB } from '../db/types'
 import { commitImport } from '../import/commit'
 import { cleanHeadword, isHeadwordLike } from '../import/normalize'
 import { getWordDetail, saveEnrichment } from '../library/words'

@@ -15,7 +15,7 @@ import {
   type StudySettings,
   type StudyStep
 } from '../../shared/types'
-import type { DB } from '../db/connection'
+import type { DB } from '../db/types'
 import { parseCloze, parseSynonyms, parseVariants } from '../library/words'
 import { dayWindow, type QueueEntry } from './queue'
 import { formatInterval, fromFsrsCard, toFsrsCard, type CardRow } from './scheduler'

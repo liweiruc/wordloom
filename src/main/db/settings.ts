@@ -1,5 +1,5 @@
 import type { AppSettings, SettingsPatch } from '../../shared/types'
-import type { DB } from './connection'
+import type { DB } from './types'
 
 export const DEFAULT_SETTINGS: AppSettings = {
   llm: {

@@ -1,6 +1,6 @@
 import { normKey } from '../../shared/text'
 import type { ImportFormat, ImportSource, ParsePreview, PreviewCandidate } from '../../shared/types'
-import type { DB } from '../db/connection'
+import type { DB } from '../db/types'
 import { detectFormat, parseLines, splitLines } from './parsers'
 
 // Parses one or more sources into a deduplicated candidate list. Each source detects its

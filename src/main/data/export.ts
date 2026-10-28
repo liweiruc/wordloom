@@ -1,4 +1,4 @@
-import type { DB } from '../db/connection'
+import type { DB } from '../db/types'
 import { parseCloze, parseSynonyms, parseVariants } from '../library/words'
 
 interface ExportRow {

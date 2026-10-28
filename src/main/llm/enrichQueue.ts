@@ -1,5 +1,5 @@
 import type { AppSettings, EnrichStatus } from '../../shared/types'
-import type { DB } from '../db/connection'
+import type { DB } from '../db/types'
 import {
   claimPending,
   countByStatus,

@@ -1,9 +1,9 @@
 import Database from 'better-sqlite3'
 import { migrate } from './migrations'
 
-export type DB = Database.Database
+export type { DB } from './types'
 
-export function openDatabase(file: string): DB {
+export function openDatabase(file: string): Database.Database {
   const db = new Database(file)
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')

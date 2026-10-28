@@ -3,7 +3,7 @@ import { resolve } from 'path'
 import iconv from 'iconv-lite'
 import { describe, expect, it } from 'vitest'
 import { commitImport } from '../src/main/import/commit'
-import { decodeText } from '../src/main/import/decode'
+import { decodeText } from '../src/shared/decode'
 import { cleanHeadword } from '../src/main/import/normalize'
 import {
   detectFormat,
@@ -151,6 +151,14 @@ describe('decodeText', () => {
   it('handles UTF-16 LE with a byte-order mark', () => {
     const buf = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('tile 瓷砖', 'utf16le')])
     expect(decodeText(buf).text).toBe('tile 瓷砖')
+  })
+
+  it('takes a plain Uint8Array, which is what the browser hands over', () => {
+    expect(decodeText(new TextEncoder().encode('apple 苹果'))).toEqual({
+      text: 'apple 苹果',
+      encoding: 'UTF-8'
+    })
+    expect(decodeText(new Uint8Array(iconv.encode('皱纹', 'gbk'))).text).toBe('皱纹')
   })
 })
 

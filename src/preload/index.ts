@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { API_METHODS, EVENT_CHANNELS, type IpcEnvelope } from '../shared/api'
 
 type Invoker = (...args: unknown[]) => Promise<unknown>
@@ -31,8 +31,4 @@ contextBridge.exposeInMainWorld('api', api)
 contextBridge.exposeInMainWorld('wordloomEvents', {
   onEnrichStatus: subscribe(EVENT_CHANNELS.enrichStatus),
   onTriageProgress: subscribe(EVENT_CHANNELS.triageProgress)
-})
-// Dropped files carry no path in a sandboxed renderer; this recovers it for the importer.
-contextBridge.exposeInMainWorld('files', {
-  pathFor: (file: File) => webUtils.getPathForFile(file)
 })

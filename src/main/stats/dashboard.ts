@@ -6,7 +6,7 @@ import {
   type Dashboard,
   type TodayOverview
 } from '../../shared/types'
-import type { DB } from '../db/connection'
+import type { DB } from '../db/types'
 import { listSummaries } from '../library/words'
 import { buildDailyQueue, dayWindow } from '../srs/queue'
 import { retrievability, type CardRow } from '../srs/scheduler'

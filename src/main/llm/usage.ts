@@ -1,4 +1,4 @@
-import type { DB } from '../db/connection'
+import type { DB } from '../db/types'
 import type { LlmCallRecord } from './enrich'
 
 export function recordLlmCall(db: DB, call: LlmCallRecord): void {

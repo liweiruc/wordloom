@@ -1,6 +1,6 @@
 import { normKey } from '../../shared/text'
 import type { CommitRequest, CommitResult } from '../../shared/types'
-import type { DB } from '../db/connection'
+import type { DB } from '../db/types'
 import { cleanHeadword, isHeadwordLike, wordKind } from './normalize'
 
 // Writes the confirmed import: a list (an existing one if the name matches, so importing a

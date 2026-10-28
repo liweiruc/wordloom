@@ -1,21 +1,11 @@
-import { copyFileSync, existsSync, readFileSync, rmSync, writeFileSync } from 'fs'
-import { basename, extname, join } from 'path'
 import type { FSRS } from 'ts-fsrs'
 import { EVENT_CHANNELS, type WordloomApi } from '../shared/api'
-import type { AppSettings, ImportSource, SettingsView } from '../shared/types'
-import type { DB } from './db/connection'
-import {
-  hasApiKey,
-  loadApiKey,
-  loadSettings,
-  saveApiKey,
-  saveSettings,
-  type SecretCodec
-} from './db/settings'
-import { autoBackup, backupDatabase, listBackups } from './data/backup'
+import type { AppSettings, BackupInfo, SettingsView, StorageInfo } from '../shared/types'
+import type { DB } from './db/types'
+import { loadSettings, saveSettings } from './db/settings'
+import { autoBackup, checkDatabaseFile } from './data/backup'
 import { exportCsv, exportJson } from './data/export'
 import { commitImport } from './import/commit'
-import { decodeText } from './import/decode'
 import { buildPreview } from './import/preview'
 import {
   deleteSense,
@@ -48,32 +38,48 @@ import { StudySession } from './srs/session'
 import { cardCurve } from './stats/curve'
 import { buildDashboard, todayOverview } from './stats/dashboard'
 
-/** The Electron pieces the services need, kept behind functions so this file stays testable. */
+// The pieces that differ between the Windows app (Electron, src/main/index.ts) and the iPad
+// web app (a Web Worker, src/web/worker.ts), kept behind interfaces so this file serves both.
+
+/** Messages to the window, and restarting. */
 export interface Platform {
-  pickFiles(): Promise<string[]>
-  pickSaveFile(
-    defaultName: string,
-    filters: { name: string; extensions: string[] }[]
-  ): Promise<string | null>
-  openPath(path: string): Promise<void>
   send(channel: string, payload: unknown): void
   /** Restarts the app; used after a restore replaced the database file. */
   relaunch(): void
 }
 
+/** Where the database file lives and how copies of it are made. */
+export interface DataStore {
+  readonly info: StorageInfo
+  /** Shows the data folder in the system's file manager, where there is one. */
+  openFolder?(): Promise<void>
+  /** Newest first. */
+  listBackups(): Promise<BackupInfo[]>
+  /** Copies the open database into the backups; regular ones beyond `keep` are pruned. */
+  backup(keep: number, prefix?: string): Promise<BackupInfo>
+  readBackup(file: string): Promise<Uint8Array>
+  /** The open database as a single file. */
+  snapshot(): Promise<Uint8Array>
+  /** Overwrites the database file. The connection is closed first, and the app relaunches after. */
+  replace(bytes: Uint8Array): Promise<void>
+}
+
+/** Keeps the LLM API key: encrypted in the database on Windows, outside it on the iPad. */
+export interface SecretStore {
+  has(): boolean
+  load(): string | null
+  save(key: string): void | Promise<void>
+}
+
 export interface ServiceDeps {
   db: DB
-  dbFile: string
-  dataDir: string
-  codec: SecretCodec
+  store: DataStore
+  secrets: SecretStore
   platform: Platform
 }
 
-const TEXT_EXTENSIONS = new Set(['.txt', '.md', '.csv', '.tsv', '.text'])
-
-function readSource(path: string): ImportSource {
-  const { text, encoding } = decodeText(readFileSync(path))
-  return { name: basename(path), text, encoding }
+function exportName(extension: string): string {
+  return `wordloom-${new Date().toISOString().slice(0, 10)}.${extension}`
 }
 
 export function createServices(deps: ServiceDeps): {
@@ -81,8 +87,7 @@ export function createServices(deps: ServiceDeps): {
   start(): Promise<void>
   shutdown(): void
 } {
-  const { db, platform } = deps
-  const backupDir = join(deps.dataDir, 'backups')
+  const { db, store, secrets, platform } = deps
 
   let settings: AppSettings = loadSettings(db)
   let scheduler: FSRS = makeScheduler(settings.study)
@@ -91,7 +96,7 @@ export function createServices(deps: ServiceDeps): {
   let session: StudySession | null = null
 
   function getClient(): LlmClient | null {
-    const apiKey = loadApiKey(db, deps.codec)
+    const apiKey = secrets.load()
     if (!apiKey) return null
     const key = `${apiKey}\n${settings.llm.baseUrl}\n${settings.llm.model}`
     if (!client || key !== clientKey) {
@@ -115,7 +120,18 @@ export function createServices(deps: ServiceDeps): {
   })
 
   function view(): SettingsView {
-    return { settings, hasApiKey: hasApiKey(db), dataDir: deps.dataDir }
+    return { settings, hasApiKey: secrets.has(), storage: store.info }
+  }
+
+  // Replaces the whole database and restarts. The current state is kept as a backup too, in
+  // case the restore was a mistake.
+  async function restoreFrom(bytes: Uint8Array): Promise<void> {
+    checkDatabaseFile(bytes)
+    await store.backup(settings.data.backupKeep, 'pre-restore-')
+    queue.pause()
+    db.close()
+    await store.replace(bytes)
+    platform.relaunch()
   }
 
   function requireSession(): StudySession {
@@ -141,7 +157,7 @@ export function createServices(deps: ServiceDeps): {
         return view()
       },
       async setApiKey(key) {
-        saveApiKey(db, deps.codec, key)
+        await secrets.save(key)
         client = null
         if (key.trim()) queue.resume()
         return view()
@@ -154,17 +170,6 @@ export function createServices(deps: ServiceDeps): {
     },
 
     importer: {
-      async pickFiles() {
-        const paths = await platform.pickFiles()
-        return paths.map(readSource)
-      },
-      async readPaths(paths) {
-        const usable = paths.filter(
-          (p) => TEXT_EXTENSIONS.has(extname(p).toLowerCase()) && existsSync(p)
-        )
-        if (usable.length === 0) throw new Error('只支持 .txt / .md / .csv 文本文件。')
-        return usable.map(readSource)
-      },
       async parse(sources, format) {
         return buildPreview(db, sources, format)
       },
@@ -312,41 +317,32 @@ export function createServices(deps: ServiceDeps): {
 
     data: {
       async openFolder() {
-        await platform.openPath(deps.dataDir)
+        await store.openFolder?.()
       },
       async backupNow() {
-        return backupDatabase(db, backupDir, settings.data.backupKeep)
+        return store.backup(settings.data.backupKeep)
       },
       async listBackups() {
-        return listBackups(backupDir)
+        return store.listBackups()
       },
       async restore(file) {
-        if (!existsSync(file)) throw new Error('备份文件不存在。')
-        // The current state is kept too, in case the restore was a mistake.
-        await backupDatabase(db, backupDir, settings.data.backupKeep, 'pre-restore-')
-        queue.pause()
-        db.close()
-        for (const suffix of ['-wal', '-shm']) rmSync(deps.dbFile + suffix, { force: true })
-        copyFileSync(file, deps.dbFile)
-        platform.relaunch()
+        await restoreFrom(await store.readBackup(file))
+      },
+      async restoreFile(bytes) {
+        await restoreFrom(bytes)
+      },
+      async exportDatabase() {
+        return {
+          name: exportName('db'),
+          mime: 'application/vnd.sqlite3',
+          data: await store.snapshot()
+        }
       },
       async exportJson() {
-        const target = await platform.pickSaveFile(
-          `wordloom-${new Date().toISOString().slice(0, 10)}.json`,
-          [{ name: 'JSON', extensions: ['json'] }]
-        )
-        if (!target) return null
-        writeFileSync(target, exportJson(db), 'utf8')
-        return target
+        return { name: exportName('json'), mime: 'application/json', data: exportJson(db) }
       },
       async exportCsv() {
-        const target = await platform.pickSaveFile(
-          `wordloom-${new Date().toISOString().slice(0, 10)}.csv`,
-          [{ name: 'CSV', extensions: ['csv'] }]
-        )
-        if (!target) return null
-        writeFileSync(target, exportCsv(db), 'utf8')
-        return target
+        return { name: exportName('csv'), mime: 'text/csv', data: exportCsv(db) }
       }
     }
   }
@@ -357,7 +353,7 @@ export function createServices(deps: ServiceDeps): {
       queue.recover()
       queue.kick()
       try {
-        await autoBackup(db, backupDir, settings.data.backupKeep)
+        await autoBackup(store, settings.data.backupKeep)
       } catch (err) {
         console.error('[backup] automatic backup failed:', err)
       }

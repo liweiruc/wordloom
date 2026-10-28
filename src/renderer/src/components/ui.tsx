@@ -271,23 +271,35 @@ export function Kbd({ children }: { children: ReactNode }): React.JSX.Element {
   )
 }
 
+// A <label>, so a click on the caption reaches the control. A field of buttons is a plain
+// group instead: a label would pass every click anywhere in it on to its first button.
 export function Field({
   label,
   hint,
+  buttons = false,
   children
 }: {
   label: string
   hint?: ReactNode
+  buttons?: boolean
   children: ReactNode
 }): React.JSX.Element {
-  return (
-    <label className="grid grid-cols-[180px_1fr] items-start gap-4 py-2.5">
+  const layout = 'grid grid-cols-[180px_1fr] items-start gap-4 py-2.5'
+  const content = (
+    <>
       <span className="pt-2 text-sm text-ink">{label}</span>
       <span className="min-w-0">
         {children}
         {hint && <span className="mt-1 block text-xs text-ink-2">{hint}</span>}
       </span>
-    </label>
+    </>
+  )
+  return buttons ? (
+    <div role="group" aria-label={label} className={layout}>
+      {content}
+    </div>
+  ) : (
+    <label className={layout}>{content}</label>
   )
 }
 

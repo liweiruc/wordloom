@@ -7,6 +7,7 @@ import type {
   CurveData,
   Dashboard,
   EnrichStatus,
+  ExportFile,
   Grade,
   ImportFormat,
   ImportSource,
@@ -29,7 +30,8 @@ import type {
 
 // The renderer's whole view of the main process. Every method becomes one IPC channel
 // named "<namespace>.<method>"; the preload builds the proxies from API_METHODS and the
-// main process registers one handler per entry, so the two sides cannot drift apart.
+// main process registers one handler per entry, so the two sides cannot drift apart. The
+// web app (src/web) builds the same proxies over messages to its worker.
 export interface WordloomApi {
   settings: {
     get(): Promise<SettingsView>
@@ -38,8 +40,7 @@ export interface WordloomApi {
     testConnection(): Promise<{ ok: boolean; message: string }>
   }
   importer: {
-    pickFiles(): Promise<ImportSource[]>
-    readPaths(paths: string[]): Promise<ImportSource[]>
+    /** The renderer reads and decodes picked or dropped files itself (shared/decode.ts). */
     parse(sources: ImportSource[], format?: ImportFormat): Promise<ParsePreview>
     triage(words: string[]): Promise<TriageItem[]>
     commit(req: CommitRequest): Promise<CommitResult>
@@ -92,14 +93,17 @@ export interface WordloomApi {
     backupNow(): Promise<BackupInfo>
     listBackups(): Promise<BackupInfo[]>
     restore(file: string): Promise<void>
-    exportJson(): Promise<string | null>
-    exportCsv(): Promise<string | null>
+    /** Replaces all data with a database file the person picked, e.g. one from another device. */
+    restoreFile(bytes: Uint8Array): Promise<void>
+    exportDatabase(): Promise<ExportFile>
+    exportJson(): Promise<ExportFile>
+    exportCsv(): Promise<ExportFile>
   }
 }
 
 export const API_METHODS = {
   settings: ['get', 'update', 'setApiKey', 'testConnection'],
-  importer: ['pickFiles', 'readPaths', 'parse', 'triage', 'commit'],
+  importer: ['parse', 'triage', 'commit'],
   enrich: ['status', 'resume', 'pause', 'retryFailed'],
   words: [
     'list',
@@ -126,7 +130,16 @@ export const API_METHODS = {
     'finish'
   ],
   stats: ['dashboard'],
-  data: ['openFolder', 'backupNow', 'listBackups', 'restore', 'exportJson', 'exportCsv']
+  data: [
+    'openFolder',
+    'backupNow',
+    'listBackups',
+    'restore',
+    'restoreFile',
+    'exportDatabase',
+    'exportJson',
+    'exportCsv'
+  ]
 } as const satisfies { [K in keyof WordloomApi]: readonly (keyof WordloomApi[K])[] }
 
 /** Pushed from the main process; each subscription returns its unsubscribe function. */
@@ -140,5 +153,5 @@ export const EVENT_CHANNELS = {
   triageProgress: 'event.triageProgress'
 } as const
 
-/** What a handler sends back over IPC; the preload unwraps it and rethrows failures. */
+/** What a handler sends back, over IPC or from the web worker; the caller rethrows failures. */
 export type IpcEnvelope = { ok: true; data: unknown } | { ok: false; error: string }

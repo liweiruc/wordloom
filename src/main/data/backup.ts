@@ -1,56 +1,48 @@
-import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'fs'
-import { join } from 'path'
 import type { BackupInfo } from '../../shared/types'
-import type { DB } from '../db/connection'
+import { SCHEMA_VERSION } from '../db/migrations'
+import type { DataStore } from '../services'
 
-const PREFIX = 'wordloom-'
+// Backups are named the same way on every platform; only regular ones (this prefix) are
+// pruned, so a pre-restore copy or a file put there by hand is never deleted.
+export const BACKUP_PREFIX = 'wordloom-'
 
 function stamp(d: Date): string {
   const pad = (n: number): string => String(n).padStart(2, '0')
   return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`
 }
 
-export function listBackups(dir: string): BackupInfo[] {
-  if (!existsSync(dir)) return []
-  return readdirSync(dir)
-    .filter((name) => name.endsWith('.db'))
-    .map((name) => {
-      const file = join(dir, name)
-      const info = statSync(file)
-      return { file, name, size: info.size, createdAt: info.mtimeMs }
-    })
-    .sort((a, b) => b.createdAt - a.createdAt)
+export function backupName(prefix = BACKUP_PREFIX, d = new Date()): string {
+  return `${prefix}${stamp(d)}.db`
 }
 
-function prune(dir: string, keep: number): void {
-  const regular = listBackups(dir).filter((b) => b.name.startsWith(PREFIX))
-  for (const old of regular.slice(Math.max(1, keep))) unlinkSync(old.file)
-}
-
-// better-sqlite3's online backup: safe while the database is open and in use.
-export async function backupDatabase(
-  db: DB,
-  dir: string,
-  keep: number,
-  prefix = PREFIX
-): Promise<BackupInfo> {
-  mkdirSync(dir, { recursive: true })
-  const name = `${prefix}${stamp(new Date())}.db`
-  const file = join(dir, name)
-  await db.backup(file)
-  if (prefix === PREFIX) prune(dir, keep)
-  const info = statSync(file)
-  return { file, name, size: info.size, createdAt: info.mtimeMs }
+/** The regular backups past the newest `keep` (at least one stays), given newest first. */
+export function backupsToPrune(backups: BackupInfo[], keep: number): BackupInfo[] {
+  return backups.filter((b) => b.name.startsWith(BACKUP_PREFIX)).slice(Math.max(1, keep))
 }
 
 /** Backs up once per calendar day, on the first start of that day. */
 export async function autoBackup(
-  db: DB,
-  dir: string,
+  store: DataStore,
   keep: number,
   now = new Date()
 ): Promise<BackupInfo | null> {
-  const today = `${PREFIX}${stamp(now).slice(0, 8)}`
-  if (listBackups(dir).some((b) => b.name.startsWith(today))) return null
-  return backupDatabase(db, dir, keep)
+  const today = `${BACKUP_PREFIX}${stamp(now).slice(0, 8)}`
+  if ((await store.listBackups()).some((b) => b.name.startsWith(today))) return null
+  return store.backup(keep)
+}
+
+const SQLITE_MAGIC = 'SQLite format 3\0'
+
+/** Throws unless the bytes are a Wordloom database this version of the app can open. */
+export function checkDatabaseFile(bytes: Uint8Array): void {
+  const magic = new TextDecoder().decode(bytes.subarray(0, 16))
+  if (bytes.length < 100 || magic !== SQLITE_MAGIC) {
+    throw new Error('这不是 Wordloom 的数据库文件（.db）。')
+  }
+  // PRAGMA user_version lives in the file header: four bytes, big-endian, at offset 60.
+  const version = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(60)
+  if (version === 0) throw new Error('这个数据库文件里没有 Wordloom 的数据。')
+  if (version > SCHEMA_VERSION) {
+    throw new Error('这个文件来自更新版本的 Wordloom，请先更新应用再恢复。')
+  }
 }

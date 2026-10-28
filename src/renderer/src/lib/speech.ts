@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
-// Pronunciation comes from the voices installed in Windows (Zira, David, Mark for US
-// English). Nothing is sent anywhere, and it works offline.
+// Pronunciation comes from the system's own voices: those installed in Windows (Zira, David,
+// Mark for US English), or the iPad's. Nothing is sent anywhere, and it works offline.
 
 export function englishVoices(): SpeechSynthesisVoice[] {
   if (!('speechSynthesis' in window)) return []
