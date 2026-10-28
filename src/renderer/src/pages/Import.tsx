@@ -251,7 +251,7 @@ export default function ImportPage(): React.JSX.Element {
               <Link to={`/library?list=${result.listId}`}>
                 <Button>查看词表</Button>
               </Link>
-              <Link to="/">
+              <Link to="/review">
                 <Button variant="primary">回到复习</Button>
               </Link>
             </div>

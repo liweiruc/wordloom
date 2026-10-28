@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Route, Routes, useLocation } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { Sidebar } from './components/Sidebar'
 import { AppProvider } from './lib/app-context'
 import ImportPage from './pages/Import'
@@ -23,8 +23,10 @@ function Shell(): React.JSX.Element {
       <Sidebar />
       <main ref={main} className="min-w-0 flex-1 overflow-y-auto">
         <Routes>
-          <Route path="/" element={<Today />} />
+          {/* The app opens on 查词. */}
+          <Route path="/" element={<Navigate to="/lookup" replace />} />
           <Route path="/lookup" element={<Lookup />} />
+          <Route path="/review" element={<Today />} />
           <Route path="/library" element={<Library />} />
           <Route path="/words/:id" element={<WordDetail />} />
           <Route path="/import" element={<ImportPage />} />

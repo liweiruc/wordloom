@@ -92,6 +92,8 @@ async function main(): Promise<void> {
   try {
     console.log('open', url)
     await page.goto(url)
+    // The app opens on 查词.
+    await page.getByLabel('要查的词').waitFor()
     await page.getByRole('link', { name: '设置' }).click()
     await page.waitForSelector('text=DeepSeek')
     await shot(page, '01-settings-empty')

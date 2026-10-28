@@ -6,7 +6,7 @@ import { ProgressBar } from './ui'
 
 const NAV = [
   { to: '/lookup', label: '查词', icon: BookSearch },
-  { to: '/', label: '复习', icon: Sun, end: true },
+  { to: '/review', label: '复习', icon: Sun },
   { to: '/library', label: '词库', icon: BookOpen },
   { to: '/import', label: '导入', icon: FileUp },
   { to: '/stats', label: '统计', icon: ChartColumn },
@@ -66,11 +66,10 @@ export function Sidebar(): React.JSX.Element {
         </div>
       </div>
       <nav className="flex flex-col gap-0.5">
-        {NAV.map(({ to, label, icon: Icon, end }) => (
+        {NAV.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}
-            end={end}
             className={({ isActive }) =>
               `flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition ${
                 isActive

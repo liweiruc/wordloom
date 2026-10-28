@@ -45,7 +45,11 @@ async function main(): Promise<void> {
   page.on('console', (msg) => {
     if (msg.type() === 'error') errors.push(msg.text())
   })
-  await page.waitForSelector('text=复习')
+  // The app opens on 查词.
+  await page.getByLabel('要查的词').waitFor()
+  await shot(page, '00-open')
+  await page.getByRole('link', { name: '复习', exact: true }).click()
+  await page.waitForSelector('text=/开始学习|继续学习/')
   await shot(page, '01-today')
 
   // ---- study: intro, blank, wrong form, rating, undo ----

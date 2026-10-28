@@ -619,7 +619,7 @@ export default function Study(): React.JSX.Element {
 
   const exit = useCallback(async () => {
     await api.study.finish()
-    navigate('/')
+    navigate('/review')
   }, [navigate])
 
   useKeys((e) => {
