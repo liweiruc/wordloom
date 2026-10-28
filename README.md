@@ -1,6 +1,6 @@
 # Wordloom
 
-自用的 Windows 背单词应用：导入单词文件 → DeepSeek 生成词条 → 挖空拼写复习，复习时间由 FSRS 遗忘曲线安排 → 统计。
+自用的背单词应用，Windows 桌面版，也可以作为网页应用装到 iPad 上（见[在 iPad 上使用](#在-ipad-上使用)）：导入单词文件 → DeepSeek 生成词条 → 挖空拼写复习，复习时间由 FSRS 遗忘曲线安排 → 统计。
 
 - **导入**：txt / md / csv 或直接粘贴；自动识别编码（UTF-8、UTF-16、GBK）和格式（词典单词本导出、逐行词表、文章）。只提取词头，原文件里的释义一概不用。粘贴的文本默认导入「生词本」。
 - **智能整理**（可选）：DeepSeek 找出复数、过去式、拼写错误、写法变体和专有名词，给出合并建议（thresholds → threshold，harrass → harass）。
@@ -34,10 +34,26 @@
 - 新卡默认先学每个词最常用的义项，同级随机，避免字母表里挨着的相似词挤在一起。
 - 「一天」从凌晨 4 点开始（可改）。今天到期的卡任何时候都可以学，不必等到它的具体时刻。
 
+## 在 iPad 上使用
+
+同一份代码也构建成网页应用，发布在 <https://liweiruc.github.io/wordloom/>。添加到主屏幕后像普通 App 一样全屏打开，离线也能用。数据库（SQLite 的 WebAssembly 版）存在 iPad 本机，不经过任何服务器；查词和生成词条时 iPad 直接调用 DeepSeek。
+
+1. 在 iPad 的 Safari 里打开上面的网址 → 分享 → 「添加到主屏幕」。以后都从主屏幕图标打开：Safari 标签页里打开的是另外一份数据。
+2. 把 Windows 上的数据搬过去：在 Windows 版「设置 → 数据」点「导出数据库文件」，通过 iCloud 云盘、OneDrive 或邮件把这个 `.db` 文件放进 iPad 的「文件」；再在 iPad 版「设置 → 数据」点「从文件恢复…」选中它。
+3. 在 iPad 版「设置」里重新填 DeepSeek API key：Windows 上的 key 用 DPAPI 加密，换台设备解不开。iPad 上的 key 只存在这台设备上，不会写进导出的数据库文件。
+4. 两边的数据**不会同步**，各是各的一份。要换回 Windows 学，就反过来导出、恢复一次。恢复会替换全部数据，原来的数据会先自动备份一份。
+5. 不时在 iPad 版「导出数据库文件」，存到「文件」里：从主屏幕删除 Wordloom 会连数据一起删除，导出的文件就是唯一的备份。
+
+- 推送到 `main` 后 GitHub Actions 自动构建并发布。iPad 上下次打开时顶部会提示「有新版本」，点「重新加载」才更新，不会在学习中途自动刷新。
+- 生成词条只在应用打开时进行（iPad 会暂停后台的网页），重新打开后接着生成。
+- 同一时间只能在一个窗口里打开；第二个窗口会提示数据正被占用，不会损坏数据。
+- 外接键盘时，学习的快捷键和 Windows 版一样。
+
 ## 数据
 
-- 数据库：`%APPDATA%\wordloom\wordloom.db`（SQLite）。每天第一次启动自动备份到 `backups\`，保留 14 份；「设置 → 数据」可以立即备份、从备份恢复、导出 JSON / CSV。
+- 数据库：`%APPDATA%\wordloom\wordloom.db`（SQLite）。每天第一次启动自动备份到 `backups\`，保留 14 份；「设置 → 数据」可以立即备份、从备份或文件恢复、导出数据库文件 / JSON / CSV。
 - 环境变量 `WORDLOOM_DATA_DIR` 可以把数据放到别的目录（便携使用或测试）。
+- iPad 版的数据库和备份在浏览器给这个网站的私有存储（OPFS）里，「设置 → 数据」的功能相同。
 
 ## 开发
 
@@ -50,18 +66,22 @@ npm test             # 单元测试（Vitest）
 npm run typecheck
 npm run lint
 npm run build:win    # 打包：dist\ 下的安装包和便携版
+npm run dev:web      # 网页版开发模式
+npm run build:web    # 构建网页版到 dist-web\（npm run preview:web 本地预览）
 ```
 
 其他脚本：
 
 - `npm run smoke:llm`：用真实 DeepSeek 跑一遍整理和生成，打印每个词条和校验结果。先设置 `$env:DEEPSEEK_API_KEY = 'sk-…'`。
 - `npm run e2e -- <截图目录>`：先 `npm run build`，再用 Playwright 驱动整个应用（导入、学习、词库、查词、统计、设置、深色模式）并截图；数据放在临时目录，不碰真实数据。设置 `E2E_EXECUTABLE=dist\win-unpacked\Wordloom.exe` 可测试打包后的程序。
-- `npm run icon`：重新生成应用图标。
+- `npm run test:wasm`：把全部单元测试换成 SQLite 的 WebAssembly 版（网页版用的那个）再跑一遍。
+- `npm run e2e:web -- <截图目录>`：先 `npm run build:web`，再在 Edge 里按 iPad 的横竖屏尺寸驱动网页版：从文件恢复一份 Windows 数据库、学习、导入 GBK 文件、查词、备份与恢复、导出、离线重新打开、第二个窗口，并截图。
+- `npm run icon`：重新生成应用图标（含网页版的图标）。
 
 ### 代码结构
 
 ```
-src/main/        Electron 主进程：数据库、导入解析、DeepSeek 生成队列、FSRS 调度、统计
+src/main/        应用逻辑（Electron 主进程；网页版在 Web Worker 里跑同一套）：数据库、导入解析、DeepSeek 生成队列、FSRS 调度、统计
   db/            SQLite 连接、迁移（PRAGMA user_version）、设置与加密的 API key
   import/        解码、格式识别与解析、规范化、写入词表
   llm/           DeepSeek 客户端、prompt、JSON 校验与修复、后台生成队列、智能整理
@@ -69,10 +89,11 @@ src/main/        Electron 主进程：数据库、导入解析、DeepSeek 生成
   lookup/        查词：先找词库和查过的词，否则整理 + 生成并保存；加入生词本
   srs/           ts-fsrs 封装、每日队列（同词互斥、穿插）、学习会话（含撤销）
   stats/         仪表盘统计、单卡遗忘曲线
-  data/          备份、导出
+  data/          备份、恢复检查、导出，Windows 的数据文件夹
 src/preload/     contextBridge：只暴露类型化的 window.api
-src/shared/      两端共用：类型、IPC 契约、挖空定位、答案判定、词形还原
-src/renderer/    React 界面：查词、复习、学习、词库、单词详情、导入、统计、设置
+src/shared/      两端共用：类型、IPC 契约、文件解码、挖空定位、答案判定、词形还原
+src/renderer/    React 界面：查词、复习、学习、词库、单词详情、导入、统计、设置（两个版本共用）
+src/web/         iPad 网页版：Worker 里的 SQLite WASM（OPFS 存储）、页面桥接 window.api、PWA
 tests/           Vitest 单元测试（样例 tests/fixtures/20261025.txt）
 scripts/         LLM 冒烟、端到端测试、图标生成
 ```
