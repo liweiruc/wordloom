@@ -1,4 +1,6 @@
-@import 'tailwindcss';
+/* Classes are collected from the renderer's own sources, whichever Vite root builds it
+   (src/renderer for the Windows app, src/web for the iPad web app). */
+@import 'tailwindcss' source('.');
 
 /*
   Colour tokens. Neutrals and chart colours follow the data-viz reference palette (validated

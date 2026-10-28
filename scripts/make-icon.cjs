@@ -1,19 +1,22 @@
-// Draws the app icon and writes build/icon.png, build/icon.ico and resources/icon.png.
+// Draws the app icon and writes build/icon.png, build/icon.ico and resources/icon.png for the
+// Windows app, and the web app's icons in src/web/public.
 // Run with Electron so the canvas has a real font renderer:  npx electron scripts/make-icon.cjs
 const { app, BrowserWindow } = require('electron')
-const { writeFileSync } = require('fs')
+const { mkdirSync, writeFileSync } = require('fs')
 const { join } = require('path')
 
 const root = join(__dirname, '..')
 const SIZES = [16, 24, 32, 48, 64, 128, 256, 512]
 
-// An amber tile, a white W, and under it the blank of a cloze card.
+// An amber tile, a white W, and under it the blank of a cloze card. iOS and Android round the
+// corners of Home Screen icons themselves, so those get a square tile (round = false); iOS
+// would fill transparent corners with black.
 const draw = `
-  window.drawIcon = (size) => {
+  window.drawIcon = (size, round = true) => {
     const c = document.createElement('canvas')
     c.width = c.height = size
     const g = c.getContext('2d')
-    const r = size * 0.22
+    const r = round ? size * 0.22 : 0
     const grad = g.createLinearGradient(0, 0, 0, size)
     grad.addColorStop(0, '#c07a16')
     grad.addColorStop(1, '#94590a')
@@ -78,7 +81,19 @@ app
     writeFileSync(join(root, 'build', 'icon.png'), bySize(512))
     writeFileSync(join(root, 'resources', 'icon.png'), bySize(256))
     writeFileSync(join(root, 'build', 'icon.ico'), ico(pngs.filter((p) => p.size <= 256)))
-    console.log('wrote build/icon.png, build/icon.ico, resources/icon.png')
+    const web = join(root, 'src', 'web', 'public')
+    mkdirSync(web, { recursive: true })
+    const webIcons = [
+      ['icon-192.png', 192, true],
+      ['icon-512.png', 512, true],
+      ['icon-maskable-512.png', 512, false],
+      ['apple-touch-icon.png', 180, false]
+    ]
+    for (const [name, size, round] of webIcons) {
+      const url = await win.webContents.executeJavaScript(`drawIcon(${size}, ${round})`)
+      writeFileSync(join(web, name), Buffer.from(url.split(',')[1], 'base64'))
+    }
+    console.log('wrote build/icon.png, build/icon.ico, resources/icon.png, src/web/public/*.png')
     app.exit(0)
   })
   .catch((err) => {

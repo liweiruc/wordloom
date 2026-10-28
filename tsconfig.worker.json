@@ -1,0 +1,15 @@
+{
+  "extends": "@electron-toolkit/tsconfig/tsconfig.json",
+  "include": [
+    "src/web/worker.ts",
+    "src/web/sqlite.ts",
+    "src/web/store.ts",
+    "src/web/secrets.ts",
+    "src/web/protocol.ts"
+  ],
+  "compilerOptions": {
+    "composite": true,
+    "lib": ["ESNext", "WebWorker", "WebWorker.AsyncIterable"],
+    "types": []
+  }
+}

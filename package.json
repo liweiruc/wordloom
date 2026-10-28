@@ -10,24 +10,29 @@
     "lint": "eslint --cache .",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
-    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "typecheck:worker": "tsc --noEmit -p tsconfig.worker.json --composite false",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web && npm run typecheck:worker",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:wasm": "vitest run --config vitest.wasm.config.mts",
     "smoke:llm": "tsx scripts/smoke-llm.ts",
     "e2e": "tsx scripts/e2e-smoke.ts",
+    "e2e:web": "tsx scripts/e2e-web.ts",
     "icon": "electron scripts/make-icon.cjs",
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
     "postinstall": "install-electron",
     "build:unpack": "npm run build && electron-builder --dir",
-    "build:win": "npm run build && electron-builder --win"
+    "build:win": "npm run build && electron-builder --win",
+    "dev:web": "vite --config vite.web.config.mts",
+    "build:web": "vite build --config vite.web.config.mts",
+    "preview:web": "vite preview --config vite.web.config.mts"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",
     "better-sqlite3": "^13.0.3",
     "compromise": "^14.19.0",
-    "iconv-lite": "^0.7.3",
     "openai": "^7.43.0",
     "ts-fsrs": "^5.4.2",
     "zod": "^4.6.7"
@@ -36,6 +41,7 @@
     "@electron-toolkit/eslint-config-prettier": "^3.0.1",
     "@electron-toolkit/eslint-config-ts": "^4.0.0",
     "@electron-toolkit/tsconfig": "^2.0.0",
+    "@sqlite.org/sqlite-wasm": "^3.54.1-build1",
     "@tailwindcss/vite": "^4.3.3",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^24.19.2",
@@ -50,6 +56,7 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.7",
+    "iconv-lite": "^0.7.3",
     "lucide-react": "^1.61.0",
     "playwright-core": "^1.64.1",
     "prettier": "^3.9.10",
@@ -60,6 +67,9 @@
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vite": "^8.3.5",
-    "vitest": "^5.0.5"
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.0.5",
+    "workbox-build": "^7.4.1",
+    "workbox-window": "^7.4.1"
   }
 }
