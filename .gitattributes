@@ -1,0 +1,6 @@
+# The project uses LF everywhere (.editorconfig); keep it that way on Windows checkouts too.
+* text=auto eol=lf
+*.png binary
+*.ico binary
+# The sample word list is UTF-16 LE; its exact bytes are what the import tests check.
+tests/fixtures/** binary

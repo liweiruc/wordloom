@@ -1,0 +1,13 @@
+node_modules
+dist
+dist-web
+out
+.DS_Store
+.eslintcache
+*.log*
+.env
+.env.*
+# Databases hold personal study data; they never belong in the repo.
+*.db
+# The original word list; tests/fixtures/20261025.txt is the same file.
+/20261025.txt

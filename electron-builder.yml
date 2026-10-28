@@ -1,0 +1,38 @@
+appId: com.wordloom.app
+productName: Wordloom
+directories:
+  buildResources: build
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!tests/*'
+  - '!scripts/*'
+  - '!20261025.txt'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!vitest.config.{js,ts,mjs,cjs}'
+  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,.editorconfig,CHANGELOG.md,README.md}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  # better-sqlite3's C sources and the binaries for other platforms are dead weight here.
+  - '!**/node_modules/better-sqlite3/{deps,src}/**'
+  - '!**/node_modules/better-sqlite3/prebuilds/{darwin,linux,linuxmusl,win32-arm64}*'
+# better-sqlite3 ships its N-API binary under prebuilds/; native modules cannot load from inside asar.
+asarUnpack:
+  - resources/**
+  - '**/*.node'
+win:
+  executableName: Wordloom
+  target:
+    - nsis
+    - portable
+nsis:
+  artifactName: ${name}-${version}-setup.${ext}
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  createDesktopShortcut: always
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+portable:
+  artifactName: ${name}-${version}-portable.${ext}
+# better-sqlite3 13 is N-API with bundled prebuilds; rebuilding would need the VS C++ toolchain.
+npmRebuild: false

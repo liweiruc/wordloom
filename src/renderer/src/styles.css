@@ -1,0 +1,197 @@
+@import 'tailwindcss';
+
+/*
+  Colour tokens. Neutrals and chart colours follow the data-viz reference palette (validated
+  for both themes); the accent is a deepened amber so white button text clears 4.5:1.
+  Dark values are their own steps, not an automatic inversion.
+*/
+:root {
+  color-scheme: light;
+  --page: #f6f5f2;
+  --surface: #fcfcfb;
+  --surface-2: #f0efeb;
+  --surface-3: #e7e5df;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --ink-3: #898781;
+  --line: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.1);
+  --accent: #a3640e;
+  --accent-ink: #ffffff;
+  --accent-text: #94590a;
+  --accent-soft: #f5ead9;
+
+  --good-bg: #eaf3de;
+  --good-ink: #27500a;
+  --warn-bg: #faeeda;
+  --warn-ink: #854f0b;
+  --bad-bg: #fcebeb;
+  --bad-ink: #791f1f;
+  --info-bg: #e6f1fb;
+  --info-ink: #0c447c;
+
+  /* chart roles */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --ord-1: #86b6ef;
+  --ord-2: #5598e7;
+  --ord-3: #2a78d6;
+  --ord-4: #184f95;
+  --area-wash: rgba(42, 120, 214, 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --page: #0f0f0e;
+    --surface: #1a1a19;
+    --surface-2: #232321;
+    --surface-3: #2e2e2b;
+    --ink: #f0efec;
+    --ink-2: #c3c2b7;
+    --ink-3: #898781;
+    --line: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.1);
+    --accent: #e3a54a;
+    --accent-ink: #1c1408;
+    --accent-text: #e3a54a;
+    --accent-soft: #3a2e18;
+
+    --good-bg: #213019;
+    --good-ink: #b8dc98;
+    --warn-bg: #3a2e18;
+    --warn-ink: #f0c987;
+    --bad-bg: #3a2020;
+    --bad-ink: #f2b8b8;
+    --info-bg: #18293b;
+    --info-ink: #a9cdf2;
+
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --ord-1: #184f95;
+    --ord-2: #256abf;
+    --ord-3: #3987e5;
+    --ord-4: #86b6ef;
+    --area-wash: rgba(57, 135, 229, 0.12);
+  }
+}
+
+@theme inline {
+  --font-sans:
+    system-ui, -apple-system, 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-text: var(--accent-text);
+  --color-accent-soft: var(--accent-soft);
+  --color-good-bg: var(--good-bg);
+  --color-good-ink: var(--good-ink);
+  --color-warn-bg: var(--warn-bg);
+  --color-warn-ink: var(--warn-ink);
+  --color-bad-bg: var(--bad-bg);
+  --color-bad-ink: var(--bad-ink);
+  --color-info-bg: var(--info-bg);
+  --color-info-ink: var(--info-ink);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Text fields show focus with their own accent border; an outline on top doubles it. */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Thin scrollbars that match the surface. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--surface-3);
+  border-radius: 8px;
+  border: 2px solid var(--page);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-fade-in {
+  animation: fade-in 0.18s ease both;
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-4px);
+  }
+  75% {
+    transform: translateX(4px);
+  }
+}
+.animate-shake {
+  animation: shake 0.25s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-shake {
+    animation: none;
+  }
+}
