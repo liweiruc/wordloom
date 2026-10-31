@@ -2,8 +2,11 @@ import { readFileSync } from 'fs'
 import { resolve } from 'path'
 import iconv from 'iconv-lite'
 import { describe, expect, it } from 'vitest'
-import { commitImport } from '../src/main/import/commit'
+import { commitImport, IMPORTED_MODEL } from '../src/main/import/commit'
+import { readEntriesFile } from '../src/main/import/entries'
+import { countByStatus, saveEnrichment } from '../src/main/library/words'
 import { decodeText } from '../src/shared/decode'
+import type { EntryDraft } from '../src/shared/types'
 import { cleanHeadword } from '../src/main/import/normalize'
 import {
   detectFormat,
@@ -15,6 +18,9 @@ import {
 } from '../src/main/import/parsers'
 import { buildPreview } from '../src/main/import/preview'
 import { openDatabase } from '../src/main/db/connection'
+import { entry, sense } from './helpers'
+
+const NOW = new Date(2026, 9, 31, 10, 0, 0).getTime()
 
 const sampleBytes = readFileSync(resolve(process.cwd(), 'tests/fixtures/20261025.txt'))
 
@@ -224,5 +230,229 @@ describe('preview and commit', () => {
     expect(db.prepare('SELECT COUNT(*) AS n FROM lists').get()).toEqual({ n: 1 })
     const positions = db.prepare('SELECT position FROM list_words ORDER BY position').all()
     expect(positions).toEqual([{ position: 0 }, { position: 1 }])
+  })
+})
+
+// A second sense of "wiggle" that passes the checks, and one that gives the word away.
+const noun = sense({
+  pos: 'n.',
+  def_en: 'a small quick movement',
+  def_zh: '扭动',
+  example_en: 'She gave a little wiggle of her hips.',
+  cloze: ['wiggle']
+})
+const leaky = sense({ def_en: 'to wiggle from side to side' })
+
+function tile(defEn: string): EntryDraft {
+  return {
+    headword: 'tile',
+    ipaUk: '/taɪl/',
+    ipaUs: '/taɪl/',
+    variants: [],
+    senses: [
+      {
+        pos: 'n.',
+        defEn,
+        defZh: '瓷砖',
+        synonyms: [],
+        register: 'neutral',
+        exampleEn: 'One tile in the bathroom is cracked.',
+        exampleZh: '浴室里有一块瓷砖裂了。',
+        cloze: ['tile']
+      }
+    ]
+  }
+}
+
+describe('entries files', () => {
+  it('reads a list of entries, a reply object, and a reply copied out of a chat', () => {
+    const wiggle = entry('wiggle', [sense()])
+    for (const text of [
+      JSON.stringify([wiggle], null, 2),
+      JSON.stringify({ entries: [wiggle] }),
+      `Here are the entries:\n\n\`\`\`json\n${JSON.stringify({ entries: [wiggle] })}\n\`\`\`\n\nWant more?`
+    ]) {
+      const file = readEntriesFile(text, 4)
+      expect(file?.skipped).toEqual([])
+      expect(file?.items).toHaveLength(1)
+      expect(file?.items[0]).toMatchObject({
+        headword: 'wiggle',
+        position: 1,
+        fileEntry: { given: 1, problems: [] }
+      })
+      expect(file?.items[0].fileEntry?.entry?.senses[0]).toMatchObject({
+        defZh: '扭动；摆动',
+        cloze: ['wiggle']
+      })
+    }
+  })
+
+  it('leaves word lists, prose and text that only opens with a bracket to the other formats', () => {
+    for (const text of [
+      'apple\nbanana',
+      '[Chorus]\nI wanna dance with somebody',
+      '1, wrinkle  [ˈrɪŋk(ə)l]  英译中\nn. 皱纹',
+      'The children were running through the parks.'
+    ]) {
+      expect(readEntriesFile(text, 4)).toBeNull()
+    }
+  })
+
+  it('says why JSON it cannot use is not imported', () => {
+    expect(() => readEntriesFile('[{"input": "wiggle", "senses": [', 4)).toThrow(/读不出来/)
+    expect(() => readEntriesFile('{"app": "wordloom", "words": []}', 4)).toThrow(/不是词条/)
+  })
+
+  it('checks every entry the way a generated one is checked', () => {
+    const file = readEntriesFile(
+      JSON.stringify([
+        entry('wiggle', [sense(), leaky]),
+        // Written for another word: no sense passes for "tile".
+        entry('tile', [sense()]),
+        'harass',
+        { input: 'threshold', senses: [] },
+        { input: 'café' },
+        42
+      ]),
+      4
+    )
+    expect(file?.items.map((i) => [i.headword, i.position])).toEqual([
+      ['wiggle', 1],
+      ['tile', 2],
+      ['harass', 3],
+      ['threshold', 4]
+    ])
+    const [wiggle, tileItem, harass, threshold] = file?.items ?? []
+    expect(wiggle.fileEntry?.given).toBe(2)
+    expect(wiggle.fileEntry?.entry?.senses).toHaveLength(1)
+    expect(wiggle.fileEntry?.problems).toEqual([
+      expect.stringMatching(/^sense 2: def_en gives the answer away/)
+    ])
+    expect(tileItem.fileEntry).toMatchObject({ entry: null, given: 1 })
+    expect(tileItem.fileEntry?.problems.join(' ')).toMatch(/not the headword "tile"/)
+    expect(harass.fileEntry).toBeNull()
+    expect(threshold.fileEntry).toBeNull()
+    expect(file?.skipped).toEqual(['第 5 项「café」不是英文单词或短语', '第 6 项不是词条'])
+  })
+
+  it('imports no more senses than a word may have, and says so', () => {
+    const file = readEntriesFile(JSON.stringify([entry('wiggle', [sense(), noun, noun])]), 1)
+    expect(file?.items[0].fileEntry?.entry?.senses).toHaveLength(1)
+    expect(file?.items[0].fileEntry?.problems).toEqual([
+      'senses 2–3 were left out: a word has at most 1 (see Settings)'
+    ])
+  })
+
+  it('previews an entries file as a format of its own, against what the library has', () => {
+    const db = openDatabase(':memory:')
+    commitImport(db, { listName: 'old', sourceFile: null, items: [{ headword: 'harass' }] })
+    const text = JSON.stringify({ entries: [entry('wiggle', [sense(), noun]), 'harass'] })
+    const preview = buildPreview(db, [{ name: 'e.json', encoding: 'UTF-8', text }], undefined, 1)
+    expect(preview).toMatchObject({ format: 'entries', detected: 'entries', skipped: [] })
+    expect(preview.sources).toEqual([
+      { name: 'e.json', encoding: 'UTF-8', lines: 1, format: 'entries' }
+    ])
+    expect(
+      preview.candidates.map((c) => [
+        c.headword,
+        c.existingStatus,
+        c.fileEntry?.entry?.senses.length ?? null
+      ])
+    ).toEqual([
+      ['wiggle', null, 1],
+      ['harass', 'pending', null]
+    ])
+  })
+
+  it('gives a word from a word list the entry an entries file imported with it has', () => {
+    const preview = buildPreview(
+      openDatabase(':memory:'),
+      [
+        { name: 'list.txt', encoding: 'UTF-8', text: 'wiggle\nthreshold\nwiggle' },
+        { name: 'e.json', encoding: 'UTF-8', text: JSON.stringify([entry('wiggle', [sense()])]) }
+      ],
+      'lineList'
+    )
+    expect(preview).toMatchObject({ format: 'lineList', detected: 'lineList' })
+    expect(preview.sources.map((s) => s.format)).toEqual(['lineList', 'entries'])
+    const [wiggle, threshold] = preview.candidates
+    expect(wiggle).toMatchObject({ source: 'list.txt', line: 1, occurrences: 3 })
+    expect(wiggle.fileEntry?.entry?.headword).toBe('wiggle')
+    expect(threshold.fileEntry).toBeNull()
+  })
+})
+
+describe('committing entries', () => {
+  const wiggle = (): EntryDraft => {
+    const file = readEntriesFile(JSON.stringify([entry('wiggle', [sense(), noun])]), 4)
+    const draft = file?.items[0].fileEntry?.entry
+    if (!draft) throw new Error('the wiggle entry should pass')
+    return draft
+  }
+
+  it('saves a word that brings its entry ready to study, and leaves the rest to the generator', () => {
+    const db = openDatabase(':memory:')
+    const result = commitImport(
+      db,
+      {
+        listName: 'e',
+        sourceFile: 'e.json',
+        items: [{ headword: 'wiggle', entry: wiggle() }, { headword: 'tile' }]
+      },
+      NOW,
+      4
+    )
+    expect(result).toMatchObject({ created: 2, linked: 0, filled: 1, queued: 1 })
+    expect(db.prepare('SELECT headword, status, llm_model FROM words ORDER BY id').all()).toEqual([
+      { headword: 'wiggle', status: 'ready', llm_model: IMPORTED_MODEL },
+      { headword: 'tile', status: 'pending', llm_model: null }
+    ])
+    expect(db.prepare('SELECT COUNT(*) AS n FROM cards').get()).toEqual({ n: 2 })
+  })
+
+  it('fills a library word still waiting for its entry, and keeps the entry a word has', () => {
+    const db = openDatabase(':memory:')
+    commitImport(db, {
+      listName: 'old',
+      sourceFile: null,
+      items: [{ headword: 'wiggle' }, { headword: 'tile' }]
+    })
+    const { id } = db.prepare("SELECT id FROM words WHERE norm = 'tile'").get() as { id: number }
+    saveEnrichment(db, id, tile('a flat square piece used to cover floors'), {
+      model: 'deepseek-chat',
+      promptVersion: 2,
+      maxSenses: 4,
+      now: NOW
+    })
+    const result = commitImport(
+      db,
+      {
+        listName: 'new',
+        sourceFile: 'e.json',
+        items: [
+          { headword: 'wiggle', entry: wiggle() },
+          { headword: 'tile', entry: tile('a thin square piece of baked clay') }
+        ]
+      },
+      NOW,
+      4
+    )
+    expect(result).toMatchObject({ created: 0, linked: 2, filled: 1, queued: 0 })
+    expect(countByStatus(db)).toMatchObject({ ready: 2, pending: 0 })
+    expect(db.prepare('SELECT def_en FROM senses WHERE word_id = ?').all(id)).toEqual([
+      { def_en: 'a flat square piece used to cover floors' }
+    ])
+  })
+
+  it('never saves an entry under a word it was not written for', () => {
+    const db = openDatabase(':memory:')
+    const result = commitImport(
+      db,
+      { listName: 'e', sourceFile: null, items: [{ headword: 'tile', entry: wiggle() }] },
+      NOW,
+      4
+    )
+    expect(result).toMatchObject({ created: 1, filled: 0, queued: 1 })
+    expect(countByStatus(db)).toMatchObject({ pending: 1, ready: 0 })
   })
 })

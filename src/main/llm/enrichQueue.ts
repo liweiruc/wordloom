@@ -3,6 +3,7 @@ import type { DB } from '../db/types'
 import {
   claimPending,
   countByStatus,
+  isEnriching,
   markFailed,
   resetInterrupted,
   retryFailed,
@@ -120,7 +121,12 @@ export class EnrichQueue {
           let stopWith: LlmError | null = null
           for (const [i, outcome] of outcomes.entries()) {
             const word = batch[i]
-            if (outcome.entry) {
+            if (outcome.retryLater) {
+              later.push(word.id)
+              if (outcome.retryLater.fatal) stopWith = outcome.retryLater
+            } else if (!isEnriching(db, word.id)) {
+              // An import filled the word (or it was removed) while the model was writing.
+            } else if (outcome.entry) {
               saveEnrichment(db, word.id, outcome.entry, {
                 model: client.model,
                 promptVersion: ENRICH_PROMPT_VERSION,
@@ -128,9 +134,6 @@ export class EnrichQueue {
                 now
               })
               this.session.done++
-            } else if (outcome.retryLater) {
-              later.push(word.id)
-              if (outcome.retryLater.fatal) stopWith = outcome.retryLater
             } else {
               markFailed(db, word.id, outcome.problems.join('; ') || '生成失败')
               this.session.failed++

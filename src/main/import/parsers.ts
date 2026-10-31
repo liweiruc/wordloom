@@ -1,6 +1,6 @@
 import { lemmatize } from '../../shared/lemmatize'
 import { hasCjk, WORD_RE } from '../../shared/text'
-import type { ImportFormat } from '../../shared/types'
+import type { TextFormat } from '../../shared/types'
 import { cleanHeadword, isHeadwordLike } from './normalize'
 
 export interface RawCandidate {
@@ -128,7 +128,7 @@ export function parseFreeText(lines: string[]): RawCandidate[] {
   return out
 }
 
-export function detectFormat(lines: string[]): ImportFormat {
+export function detectFormat(lines: string[]): TextFormat {
   const nonEmpty = lines.filter((line) => line.trim() && !hasCjkOnly(line))
   const all = lines.filter((line) => line.trim())
   if (all.length === 0) return 'lineList'
@@ -146,7 +146,7 @@ function hasCjkOnly(line: string): boolean {
   return hasCjk(line) && !/[A-Za-z]/.test(line)
 }
 
-export function parseLines(lines: string[], format: ImportFormat): RawCandidate[] {
+export function parseLines(lines: string[], format: TextFormat): RawCandidate[] {
   switch (format) {
     case 'dictExport':
       return parseDictExport(lines)

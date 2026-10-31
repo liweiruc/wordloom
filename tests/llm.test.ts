@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { openDatabase } from '../src/main/db/connection'
 import { DEFAULT_SETTINGS } from '../src/main/db/settings'
-import { commitImport } from '../src/main/import/commit'
+import { commitImport, IMPORTED_MODEL } from '../src/main/import/commit'
 import { countByStatus } from '../src/main/library/words'
 import { LlmClient, type LlmConfig } from '../src/main/llm/client'
 import { enrichWords } from '../src/main/llm/enrich'
@@ -285,6 +285,54 @@ describe('EnrichQueue', () => {
     queue.kick()
     await finished
     expect(queue.status()).toMatchObject({ paused: true, pending: 1, lastError: 'API key 无效' })
+  })
+
+  it('keeps the entry an import saved while the model was still writing', async () => {
+    const db = openDatabase(':memory:')
+    commitImport(db, { listName: 'l', sourceFile: null, items: [{ headword: 'wiggle' }] })
+    const imported = checkEntry(entry('wiggle', [sense()]), 'wiggle', 4).entry
+    if (!imported) throw new Error('the wiggle entry should pass')
+    const { client } = fakeClient([
+      () => {
+        // The queue has claimed the word for this request; an entries file brings it meanwhile.
+        commitImport(db, {
+          listName: 'e',
+          sourceFile: 'e.json',
+          items: [{ headword: 'wiggle', entry: imported }]
+        })
+        return reply([
+          entry('wiggle', [
+            sense(),
+            sense({
+              pos: 'n.',
+              def_en: 'a small quick movement',
+              example_en: 'She gave a little wiggle of her hips.',
+              cloze: ['wiggle']
+            })
+          ])
+        ])
+      }
+    ])
+    const statuses: EnrichStatus[] = []
+    let finish: () => void = () => {}
+    const finished = new Promise<void>((resolve) => (finish = resolve))
+    const queue = new EnrichQueue({
+      db,
+      getClient: () => client,
+      getSettings: () => DEFAULT_SETTINGS,
+      onStatus: (s) => {
+        statuses.push(s)
+        if (!s.running && s.pending === 0 && s.enriching === 0) finish()
+      }
+    })
+    queue.kick()
+    await finished
+    expect(db.prepare('SELECT status, llm_model FROM words').get()).toEqual({
+      status: 'ready',
+      llm_model: IMPORTED_MODEL
+    })
+    expect(db.prepare('SELECT COUNT(*) AS n FROM cards').get()).toEqual({ n: 1 })
+    expect(statuses.at(-1)?.session.done).toBe(0)
   })
 })
 

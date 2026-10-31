@@ -171,7 +171,7 @@ export function createServices(deps: ServiceDeps): {
 
     importer: {
       async parse(sources, format) {
-        return buildPreview(db, sources, format)
+        return buildPreview(db, sources, format, settings.llm.maxSenses)
       },
       async triage(words) {
         return triageWords(
@@ -181,8 +181,9 @@ export function createServices(deps: ServiceDeps): {
         )
       },
       async commit(req) {
-        const result = commitImport(db, req)
-        queue.kick()
+        const result = commitImport(db, req, Date.now(), settings.llm.maxSenses)
+        // Finished entries give the generator nothing to do, so it is not woken for them.
+        if (result.queued > 0) queue.kick()
         return result
       }
     },

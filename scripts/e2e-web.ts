@@ -2,8 +2,9 @@
 //   npm run e2e:web -- [screenshot-dir]
 // Serves dist-web under /wordloom/, as GitHub Pages does, and drives it in Microsoft Edge at
 // iPad sizes: restores a database written the way the Windows app writes it through 设置 →
-// 从文件恢复, studies, imports a GBK file, looks a word up, backs up and restores, exports,
-// reloads offline, opens a second tab, and checks that the API key never reaches an export.
+// 从文件恢复, studies, imports a GBK file and pastes an entry, looks a word up, backs up and
+// restores, exports, reloads offline, opens a second tab, and checks that the API key never
+// reaches an export.
 /// <reference lib="dom" />
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
@@ -13,7 +14,7 @@ import { chromium, type Page } from 'playwright-core'
 import { preview } from 'vite'
 import { openDatabase } from '../src/main/db/connection'
 import type { WordloomApi } from '../src/shared/api'
-import { seed } from './e2e-seed'
+import { CHAT_ENTRIES, chatReply, seed } from './e2e-seed'
 
 // The API the web app's bridge puts on window. page.evaluate callbacks run inside the page,
 // so each one reaches it through window itself; only this type crosses over.
@@ -157,6 +158,25 @@ async function main(): Promise<void> {
     await page.waitForSelector('text=导入预览')
     check((await page.getByText('GB18030').count()) > 0, 'the GBK file was not read as GB18030')
     await shot(page, '05-import-gbk')
+
+    // ---- paste a chat reply with the entry for the seed's pending word ----
+    // It adds no word, so the totals checked below stay the seed's.
+    await page.getByRole('button', { name: '重新选择' }).click()
+    await page.getByPlaceholder(/每行一个单词/).fill(chatReply([CHAT_ENTRIES.serendipity]))
+    await page.getByRole('button', { name: '解析' }).click()
+    await page.waitForSelector('text=词条文件（JSON）')
+    await page.getByRole('button', { name: /^导入 \d+ 个词$/ }).click()
+    await page.waitForSelector('text=用了文件里的词条')
+    await shot(page, '05b-import-entries')
+    const filled = await page.evaluate(async () => {
+      const api = (window as unknown as Bridge).api
+      const found = await api.words.list({ search: 'serendipity' })
+      return found.items.find((w) => w.headword === 'serendipity')
+    })
+    check(
+      filled?.status === 'ready' && filled.senseCount === 1,
+      `serendipity did not take the pasted entry: ${JSON.stringify(filled)}`
+    )
 
     // ---- lookup: a library word, so no model is needed ----
     await page.getByRole('link', { name: '查词' }).click()

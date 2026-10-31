@@ -9,7 +9,6 @@ import type {
   EnrichStatus,
   ExportFile,
   Grade,
-  ImportFormat,
   ImportSource,
   ListSummary,
   LookupHistoryItem,
@@ -20,6 +19,7 @@ import type {
   SettingsPatch,
   SettingsView,
   StudyStep,
+  TextFormat,
   TodayOverview,
   TriageItem,
   WordDetail,
@@ -41,7 +41,7 @@ export interface WordloomApi {
   }
   importer: {
     /** The renderer reads and decodes picked or dropped files itself (shared/decode.ts). */
-    parse(sources: ImportSource[], format?: ImportFormat): Promise<ParsePreview>
+    parse(sources: ImportSource[], format?: TextFormat): Promise<ParsePreview>
     triage(words: string[]): Promise<TriageItem[]>
     commit(req: CommitRequest): Promise<CommitResult>
   }

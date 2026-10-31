@@ -85,7 +85,10 @@ export type StorageInfo = { kind: 'folder'; path: string } | { kind: 'browser' }
 
 // ---------- import ----------
 
-export type ImportFormat = 'dictExport' | 'lineList' | 'freeText'
+export type ImportFormat = 'dictExport' | 'lineList' | 'freeText' | 'entries'
+
+/** The formats a text source can be read in. An entries file is known by its content alone. */
+export type TextFormat = Exclude<ImportFormat, 'entries'>
 
 export interface ImportSource {
   name: string
@@ -93,21 +96,38 @@ export interface ImportSource {
   encoding: string
 }
 
+/** The entry an entries file gives a word, as the generation checks found it. */
+export interface FileEntry {
+  /** The senses that passed, at most maxSenses of them; null when none did. */
+  entry: EntryDraft | null
+  /** How many senses the file gives. */
+  given: number
+  /** What the checks found wrong, worded as they word it for the model, and senses over the limit. */
+  problems: string[]
+}
+
 export interface PreviewCandidate {
   headword: string
   norm: string
-  /** 1-based line of the first occurrence, in the source it came from. */
+  /**
+   * 1-based line of the first occurrence, in the source it came from; in an entries file, the
+   * item's position.
+   */
   line: number
   source: string
   occurrences: number
   existingWordId: number | null
+  existingStatus: WordStatus | null
+  fileEntry: FileEntry | null
 }
 
 export interface ParsePreview {
   format: ImportFormat
   detected: ImportFormat
-  sources: { name: string; encoding: string; lines: number }[]
+  sources: { name: string; encoding: string; lines: number; format: ImportFormat }[]
   candidates: PreviewCandidate[]
+  /** Items of entries files that were left out, and why. */
+  skipped: string[]
 }
 
 export type TriageKind =
@@ -124,6 +144,8 @@ export interface TriageItem {
 export interface CommitItem {
   headword: string
   kind?: WordKind
+  /** From an entries file: saved as it is, so the word is never generated. */
+  entry?: EntryDraft
 }
 
 export interface CommitRequest {
@@ -136,6 +158,10 @@ export interface CommitResult {
   listId: number
   created: number
   linked: number
+  /** Words, new or still waiting for an entry, that were saved with the file's entry. */
+  filled: number
+  /** New words left to the generator. */
+  queued: number
 }
 
 // ---------- enrichment ----------

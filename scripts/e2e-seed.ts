@@ -109,6 +109,73 @@ const REAL: Record<string, EntryDraft> = {
   }
 }
 
+/**
+ * Entries as a chat would write them, for the runs to import as an entries file: "drizzle", new,
+ * with a third sense that gives the word away (left out, and listed as a problem), and the
+ * seed's pending "serendipity", which takes its entry instead of waiting for the generator.
+ */
+export const CHAT_ENTRIES = {
+  drizzle: {
+    input: 'drizzle',
+    ipa_uk: '/ˈdrɪz.əl/',
+    ipa_us: '/ˈdrɪz.əl/',
+    senses: [
+      {
+        pos: 'n.',
+        def_en: 'light rain falling in very small drops',
+        def_zh: '毛毛雨；细雨',
+        synonyms: ['mist', 'sprinkle'],
+        register: 'neutral',
+        example_en: 'The drizzle kept falling all afternoon, so we stayed inside.',
+        example_zh: '毛毛雨下了一下午，我们就待在屋里。',
+        cloze: ['drizzle']
+      },
+      {
+        pos: 'v.',
+        def_en: 'to pour a thin stream of liquid over food',
+        def_zh: '（在食物上）淋，洒',
+        synonyms: ['trickle'],
+        register: 'neutral',
+        example_en: 'Drizzle a little olive oil over the salad before serving.',
+        example_zh: '上菜前在沙拉上淋一点橄榄油。',
+        cloze: ['Drizzle']
+      },
+      {
+        pos: 'v.',
+        def_en: 'to drizzle lightly',
+        def_zh: '下毛毛雨',
+        synonyms: [],
+        register: 'neutral',
+        example_en: 'It started to drizzle as we left the house.',
+        example_zh: '我们出门的时候开始下毛毛雨了。',
+        cloze: ['drizzle']
+      }
+    ]
+  },
+  serendipity: {
+    input: 'serendipity',
+    ipa_uk: '/ˌser.ənˈdɪp.ə.ti/',
+    ipa_us: '/ˌser.ənˈdɪp.ə.ti/',
+    senses: [
+      {
+        pos: 'n.',
+        def_en: 'finding something good by chance, without looking for it',
+        def_zh: '机缘巧合；意外发现好东西的运气',
+        synonyms: ['luck', 'chance', 'fluke'],
+        register: 'neutral',
+        example_en: 'We met by pure serendipity in a little bookshop in Paris.',
+        example_zh: '我们纯属机缘巧合，在巴黎一家小书店里相遇。',
+        cloze: ['serendipity']
+      }
+    ]
+  }
+}
+
+/** A reply copied out of a chat: a sentence, then the entries in a ```json fence. */
+export function chatReply(entries: unknown[]): string {
+  return `Here are the entries:\n\`\`\`json\n${JSON.stringify({ entries })}\n\`\`\``
+}
+
 /** Writes the seeded database to file (a Windows-style database: WAL mode). */
 export function seed(file: string): void {
   const db = openDatabase(file)

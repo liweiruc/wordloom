@@ -1,8 +1,9 @@
 // End-to-end smoke run of the built app (`npm run build` first):
 //   npx tsx scripts/e2e-smoke.ts [screenshot-dir]
 // Seeds a throwaway data folder from the sample word list, simulates ~40 days of study
-// with the real scheduler, then drives the Electron app through import, study, library,
-// word detail, lookup, statistics and settings, saving a screenshot of each.
+// with the real scheduler, then drives the Electron app through import (a word list and an
+// entries file), study, library, word detail, lookup, statistics and settings, saving a
+// screenshot of each.
 /// <reference lib="dom" />
 import { mkdirSync, mkdtempSync } from 'fs'
 import { tmpdir } from 'os'
@@ -10,7 +11,7 @@ import { join, resolve } from 'path'
 import { _electron as electron, type Page } from 'playwright-core'
 import { openDatabase } from '../src/main/db/connection'
 import type { WordloomApi } from '../src/shared/api'
-import { seed } from './e2e-seed'
+import { CHAT_ENTRIES, chatReply, seed } from './e2e-seed'
 
 // The renderer's preload bridge. page.evaluate callbacks run inside the page, so each one
 // reaches it through window itself; only this type crosses over.
@@ -113,6 +114,37 @@ async function main(): Promise<void> {
   await page.getByRole('button', { name: /^导入 \d+ 个词$/ }).click()
   await page.waitForSelector('text=已导入到')
   await shot(page, '10-import-done')
+
+  // ---- import entries written elsewhere: a chat reply pasted in, saved as it is ----
+  await page.getByRole('button', { name: '继续导入' }).click()
+  await page.getByPlaceholder(/每行一个单词/).fill(chatReply(Object.values(CHAT_ENTRIES)))
+  await page.getByRole('button', { name: '解析' }).click()
+  await page.waitForSelector('text=词条文件（JSON）')
+  await shot(page, '10b-import-entries-preview')
+  await page.getByRole('button', { name: /^导入 \d+ 个词$/ }).click()
+  await page.waitForSelector('text=用了文件里的词条')
+  await shot(page, '10c-import-entries-done')
+  // No named functions inside: tsx would wrap them in a helper the page does not have.
+  const [drizzle, serendipity] = await page.evaluate(async () => {
+    const api = (window as unknown as Bridge).api
+    return Promise.all(
+      ['drizzle', 'serendipity'].map(async (headword) =>
+        (await api.words.list({ search: headword })).items.find((w) => w.headword === headword)
+      )
+    )
+  })
+  if (
+    drizzle?.status !== 'ready' ||
+    drizzle.senseCount !== 2 ||
+    serendipity?.status !== 'ready' ||
+    serendipity.senseCount !== 1
+  ) {
+    errors.push(
+      `entries file not imported as ready words: ${JSON.stringify([drizzle, serendipity])}`
+    )
+  } else {
+    console.log('entries file imported: words saved with their entries, nothing generated')
+  }
 
   // ---- library, word detail ----
   await page.getByRole('link', { name: '词库' }).click()

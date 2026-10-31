@@ -55,6 +55,13 @@ export function returnToPending(db: DB, ids: number[]): void {
   db.transaction(() => ids.forEach((id) => stmt.run(id)))()
 }
 
+/** False once a word being generated has been filled some other way (by an import) or removed. */
+export function isEnriching(db: DB, id: number): boolean {
+  const row = db.prepare('SELECT status FROM words WHERE id = ?').get(id) as
+    { status: WordStatus } | undefined
+  return row?.status === 'enriching'
+}
+
 export function markFailed(db: DB, id: number, error: string): void {
   db.prepare("UPDATE words SET status = 'failed', error = ? WHERE id = ?").run(error, id)
 }
